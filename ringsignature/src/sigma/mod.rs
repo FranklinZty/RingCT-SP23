@@ -25,7 +25,7 @@ where
     fn setup<R: Rng>(
         rng: &mut R,
         wit: &mut Self::Witness,
-        msg: &String,
+        msg: Option<&String>,
         supported_size: usize,
     ) -> Result<Self::PublicParams, SigmaErrors>;
 

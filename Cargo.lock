@@ -520,6 +520,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "rangeproof"
+version = "0.1.0"
+dependencies = [
+ "ark-ec",
+ "ark-ff",
+ "ark-secp256k1",
+ "ark-std",
+ "rand",
+ "ringsignature",
+ "sha256",
+]
+
+[[package]]
 name = "ringsignature"
 version = "0.1.0"
 dependencies = [

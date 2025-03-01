@@ -41,7 +41,7 @@ where
     fn setup<R: Rng>(
         rng: &mut R,
         wit: &mut Self::Witness, // secret key
-        msg: &String,
+        msg: Option<&String>,
         supported_size: usize, // ring size
     ) -> Result<Self::PublicParams, SigmaErrors> {
         // generate commitment scheme parameters (vec_g, u)
@@ -64,7 +64,7 @@ where
             num_witness: wit.len(),
             num_pub_inputs: supported_size,
             com_parameters: vec![com_params_1, com_params_2, key_params],
-            message: msg.clone(),
+            message: msg.unwrap().clone(),
             vec_pk,
         })
     }
@@ -142,8 +142,8 @@ where
 
         let com_E = C::msm(&params.vec_pk, &vec_r0_yn).unwrap() + PedersenCommitmentScheme::commit(&param_key, &vec![neg_rs], &C::ScalarField::zero(), "E")?;
         let param_u_v = PedersenParams {
-            gen: param_h_v.gen.clone(),
-            vec_gen: vec![param_g_u.gen.into_affine().clone()],
+            generator: param_h_v.generator.clone(),
+            vec_gen: vec![param_g_u.generator.into_affine().clone()],
         };
         let com_T1 = PedersenCommitmentScheme::commit(&param_u_v, &vec![tau1], &t1, "T1")?;
         let com_T2 = PedersenCommitmentScheme::commit(&param_u_v, &vec![tau2], &t2, "T2")?;
@@ -307,7 +307,7 @@ mod tests {
         type Ring = RingSignatureScheme<Projective>;
         let message = String::from("Welcome to the world of Zero Knowledge!");
         // setup algorithm
-        let ring_params = Ring::setup(&mut rng, &mut wit, &message, ring_size).unwrap();
+        let ring_params = Ring::setup(&mut rng, &mut wit, Some(&message), ring_size).unwrap();
         // prove algorithm
         let proof = Ring::prove(&mut rng, &ring_params, &wit).unwrap();
         // verify algorithm

@@ -37,7 +37,7 @@ where
 
     /// Setup algorithm with
     /// Inputs:
-    /// - rng: RngCore palys a role as the random tape
+    /// - rng: RngCore plays a role as the random tape
     /// - max: the maximum length of the witness supported
     /// Outputs:
     /// - Params<C>: Pedersen commitment parameter as a tuple (h, generators)
@@ -45,7 +45,7 @@ where
     fn setup<R: Rng>(
         rng: &mut R,
         wit: &mut Self::Witness,
-        msg: &String,
+        msg: Option<&String>,
         supported_size: usize,
     ) -> Result<Self::PublicParams, SigmaErrors> {
         let start = start_timer!(|| "running sigma protocol setup algorithm...");
@@ -60,7 +60,7 @@ where
             num_witness: wit.len(),
             num_pub_inputs: 1,
             com_parameters: com_params,
-            message: msg.clone(),
+            message: msg.unwrap().clone(),
         };
         end_timer!(start);
         Ok(schnorr_params)
@@ -176,7 +176,7 @@ mod tests {
         type Schnorr = SchnorrProtocol<Projective>;
         // setup algorithm
         let message = String::from("Welcome to the world of Zero Knowledge!");
-        let params = Schnorr::setup(&mut rng, &mut wit, &message, supported_size).unwrap();
+        let params = Schnorr::setup(&mut rng, &mut wit, Some(&message), supported_size).unwrap();
         // prove algorithm
         let proof = Schnorr::prove(&mut rng, &params, &wit).unwrap();
         // verify algorithm

@@ -4,7 +4,7 @@ use std::fmt::Debug;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct PedersenParams<C: CurveGroup> {
-    pub gen: C,
+    pub generator: C,
     pub vec_gen: Vec<C::Affine>,
 }
 

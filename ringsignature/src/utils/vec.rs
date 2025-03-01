@@ -11,6 +11,24 @@ pub fn convert<F: PrimeField>(m: &[u64]) -> Vec<F> {
     vec_field
 }
 
+/// convert u128 value to a binary vector Vec<F> in big-endian
+pub fn u128_to_bin<F: PrimeField>(n: u128) -> Vec<F> {
+    // convert u128 to binary string
+    let binary_str = format!("{:b}", n);
+
+    let length = binary_str.len();
+
+    // pad the length to powers of two
+    let mut padded_binary_str = String::new();
+    for _ in 0..(128 - length) {
+        padded_binary_str.push('0');
+    }
+    padded_binary_str.push_str(&binary_str);
+
+    // convert binary str to vector of F
+    padded_binary_str.chars().map(|c| F::from(c.to_digit(2).unwrap() as u128)).collect()
+}
+
 pub fn shuffle<C: CurveGroup>(vec_pk: & mut Vec<C::Affine>, pk: C::Affine) -> Vec<C::ScalarField>{
     let mut rng = thread_rng();
     vec_pk.shuffle(&mut rng);
@@ -73,6 +91,13 @@ mod tests {
         let msg: [u64; 4] = [1, 2, 3, 4];
         let msg_field: Vec<Fr> = convert(&msg);
         assert_eq!(msg_field, vec![Fr::from(1u64), Fr::from(2u64), Fr::from(3u64), Fr::from(4u64)]);
+    }
+
+    #[test]
+    fn test_u128_to_bin() {
+        let m:u128 = 64 + 32;
+        let vec_bin:Vec<Fr> = u128_to_bin(m);
+        println!("{:?}", vec_bin);
     }
 
     #[test]

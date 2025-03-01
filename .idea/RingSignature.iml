@@ -7,6 +7,7 @@
       <sourceFolder url="file://$MODULE_DIR$/zkp/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/zkp/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/rangeproof/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/ringsignature/target" />
       <excludeFolder url="file://$MODULE_DIR$/zkp/target" />
       <excludeFolder url="file://$MODULE_DIR$/target" />

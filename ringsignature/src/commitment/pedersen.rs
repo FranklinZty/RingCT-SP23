@@ -1,5 +1,5 @@
 use ark_ec::CurveGroup;
-use ark_std::{end_timer, marker::PhantomData, rand::Rng, start_timer, UniformRand};
+use ark_std::{end_timer, marker::PhantomData, rand::Rng, start_timer, UniformRand, Zero};
 
 use std::fmt::Debug;
 
@@ -27,7 +27,7 @@ impl<C: CurveGroup> PedersenCommitmentScheme<C> {
         // generator vector with unknown DL relation
         let generators = vec![C::Affine::rand(rng); supported_size];
         let pp = PedersenParams {
-            gen: g.mul(h_scalar),
+            generator: g.mul(h_scalar),
             vec_gen: generators,
         };
         Ok(pp)
@@ -54,7 +54,42 @@ impl<C: CurveGroup> PedersenCommitmentScheme<C> {
             ));
         }
         let msm = C::msm(&params.vec_gen, m).unwrap();
-        let cm: C = params.gen.mul(r) + msm;
+        let cm: C = params.generator.mul(r) + msm;
+        end_timer!(start);
+        Ok(cm)
+    }
+
+    /// Batch commit algorithm takes inputs as
+    /// - vec_params: multiple PublicParams
+    /// - vec_m: multiple messages in vectors
+    /// - r: random elements for hiding
+    /// then outputs
+    /// - cm: a pedersen vector commitment generated from vec_params[i].vec_gen * vec_m[i] + vec_gen[0].generator * r
+    pub fn batch_commit(
+        vec_params: &Vec<PedersenParams<C>>,
+        vec_m: &Vec<Vec<C::ScalarField>>,
+        r: &C::ScalarField,
+        info: &str,
+    ) -> Result<C, CommitmentErrors> {
+        let log_info = "generating pedersen commitment ".to_owned() + info;
+        let start = start_timer!(|| log_info);
+
+        // ensure legal lengths
+        let length = vec_params.len();
+        if length != vec_m.len() {
+            return Err(CommitmentErrors::InvalidParameters(
+                "message length should equal to the generator length".to_string(),
+            ));
+        }
+
+        // todo: implement in multi-threads
+        let mut cm= C::zero();
+        for i in 0..length {
+            let msm = C::msm(&vec_params[i].vec_gen, &vec_m[i]).unwrap();
+            cm += msm;
+        }
+        cm += vec_params[0].generator.mul(r);
+
         end_timer!(start);
         Ok(cm)
     }
@@ -86,7 +121,7 @@ impl<C: CurveGroup> PedersenCommitmentScheme<C> {
         let start = start_timer!(|| "checking pedersen commitment...");
         let params = params;
         let msm = C::msm(&params.vec_gen, &open.message).unwrap();
-        let cm_prime = params.gen.mul(open.random) + msm;
+        let cm_prime = params.generator.mul(open.random) + msm;
         end_timer!(start);
         Ok(&cm_prime == cm)
     }
@@ -115,6 +150,28 @@ mod tests {
             PedersenCommitmentScheme::<Projective>::verify(&params, &cm, &opening).unwrap(),
             true
         );
+    }
+
+    #[test]
+    fn test_pedersen_batch() {
+        let mut rng = ark_std::test_rng();
+        let supported_size = 10;
+        let params_1 =
+            PedersenCommitmentScheme::<Projective>::setup(&mut rng, supported_size).unwrap();
+        let m_1: [u64; 10] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+        let field_m1: Vec<Fr> = convert(&m_1);
+        let params_2 =
+            PedersenCommitmentScheme::<Projective>::setup(&mut rng, supported_size).unwrap();
+        let m_2: [u64; 10] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+        let field_m2: Vec<Fr> = convert(&m_2);
+        let r = Fr::rand(&mut rng);
+
+        let cm_1 = PedersenCommitmentScheme::<Projective>::commit(&params_1, &field_m1, &r, "cm 1").unwrap();
+        let cm_2 = PedersenCommitmentScheme::<Projective>::commit(&params_2, &field_m2, &Fr::zero(), "cm 2").unwrap();
+
+        let batch_cm = PedersenCommitmentScheme::<Projective>::batch_commit(&vec![params_1, params_2], &vec![field_m1, field_m2], &r, "batched cm").unwrap();
+
+        assert_eq!(batch_cm, cm_1+cm_2);
     }
 
     #[bench]
