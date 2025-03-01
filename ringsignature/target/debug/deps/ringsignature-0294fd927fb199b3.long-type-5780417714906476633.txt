@@ -1,1 +1,0 @@
-ark_ff::fields::models::fp::Fp<ark_ff::fields::models::fp::montgomery_backend::MontBackend<FrConfig, 4>, 4>
