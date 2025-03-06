@@ -66,6 +66,7 @@ impl<C: CurveGroup> PedersenCommitmentScheme<C> {
     /// - cm: a pedersen vector commitment generated from vec_params[i].vec_gen * vec_m[i] + vec_gen[0].generator * r
     pub fn batch_commit(
         vec_params: &Vec<PedersenParams<C>>,
+        generator: &C,
         vec_m: &Vec<Vec<C::ScalarField>>,
         r: &C::ScalarField,
         info: &str,
@@ -87,7 +88,7 @@ impl<C: CurveGroup> PedersenCommitmentScheme<C> {
             let msm = C::msm(&vec_params[i].vec_gen, &vec_m[i]).unwrap();
             cm += msm;
         }
-        cm += vec_params[0].generator.mul(r);
+        cm += generator.mul(r);
 
         end_timer!(start);
         Ok(cm)
@@ -130,9 +131,10 @@ impl<C: CurveGroup> PedersenCommitmentScheme<C> {
 mod tests {
     use super::*;
     use crate::toolbox::vec::convert;
-    use ark_ff::Zero;
+    use ark_ff::{Zero};
     use ark_bls12_381::{Fr as G1Fr, G1Projective};
     use ark_secp256k1::{Fr, Projective};
+    use ark_ec::Group;
     use test::Bencher;
 
     #[test]
@@ -165,13 +167,15 @@ mod tests {
         let m_2: [u64; 10] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
         let field_m2: Vec<Fr> = convert(&m_2);
         let r = Fr::rand(&mut rng);
+        let generator = params_1.generator;
 
-        let cm_1 = PedersenCommitmentScheme::<Projective>::commit(&params_1, &field_m1, &r, "cm 1").unwrap();
+        let cm_1 = PedersenCommitmentScheme::<Projective>::commit(&params_1, &field_m1, &Fr::zero(), "cm 1").unwrap();
         let cm_2 = PedersenCommitmentScheme::<Projective>::commit(&params_2, &field_m2, &Fr::zero(), "cm 2").unwrap();
+        let cm_r = generator*r;
 
-        let batch_cm = PedersenCommitmentScheme::<Projective>::batch_commit(&vec![params_1, params_2], &vec![field_m1, field_m2], &r, "batched cm").unwrap();
+        let batch_cm = PedersenCommitmentScheme::<Projective>::batch_commit(&vec![params_1, params_2], &generator, &vec![field_m1, field_m2], &r, "batched cm").unwrap();
 
-        assert_eq!(batch_cm, cm_1+cm_2);
+        assert_eq!(batch_cm, cm_1+cm_2+cm_r);
     }
 
     #[bench]

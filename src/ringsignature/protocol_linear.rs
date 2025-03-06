@@ -149,7 +149,7 @@ where
         let com_T2 = PedersenCommitmentScheme::commit(&param_u_v, &vec![tau2], &t2, "T2")?;
 
         // P->V: E, T1, T2
-        transcript.append_serializable_element(b"commitments A,B", &[com_E, com_T1, com_T2])?;
+        transcript.append_serializable_element(b"commitments E,T1,T2", &[com_E, com_T1, com_T2])?;
 
         // append the message digest to the transcript
         let h = digest(&params.message);
@@ -235,7 +235,7 @@ where
         transcript.append_serializable_element(b"commitments A,B", &[com_A, com_B])?;
         let y = transcript.get_and_append_challenge(b"challenge y")?;
         let z = transcript.get_and_append_challenge(b"challenge z")?;
-        transcript.append_serializable_element(b"commitments A,B", &[com_E, com_T1, com_T2])?;
+        transcript.append_serializable_element(b"commitments E,T1,T2", &[com_E, com_T1, com_T2])?;
         let h = sha256::digest(&params.message);
         assert_eq!(&h, digest);
         let mut h_msg: &mut [u8] = &mut [0; 32];

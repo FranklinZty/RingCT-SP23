@@ -4,6 +4,6 @@
 extern crate test;
 
 mod bulletproofs;
-// mod rangeproof;
+mod rangeproof;
 mod ringsignature;
 mod toolbox;

@@ -11,7 +11,7 @@ pub fn convert<F: PrimeField>(m: &[u64]) -> Vec<F> {
     vec_field
 }
 
-/// convert u128 value to a binary vector Vec<F> in big-endian
+/// convert u128 value to a binary vector Vec<F> in little endian
 pub fn u128_to_bin<F: PrimeField>(n: u128) -> Vec<F> {
     // convert u128 to binary string
     let binary_str = format!("{:b}", n);
@@ -26,7 +26,7 @@ pub fn u128_to_bin<F: PrimeField>(n: u128) -> Vec<F> {
     padded_binary_str.push_str(&binary_str);
 
     // convert binary str to vector of F
-    padded_binary_str.chars().map(|c| F::from(c.to_digit(2).unwrap() as u128)).collect()
+    padded_binary_str.chars().map(|c| F::from(c.to_digit(2).unwrap() as u128)).rev().collect()
 }
 
 pub fn shuffle<C: CurveGroup>(vec_pk: & mut Vec<C::Affine>, pk: C::Affine) -> Vec<C::ScalarField>{
@@ -80,7 +80,7 @@ pub fn hadamard_product<F: PrimeField>(vec_a: &Vec<F>, vec_b: &Vec<F>) -> Vec<F>
 }
 
 pub fn generate_powers<F: PrimeField>(y: F, n: usize) -> Vec<F> {
-    iter::successors(Some(y), |&current_power| Some(current_power * y))
+    iter::successors(Some(F::one()), |&current_power| Some(current_power * y))
         .take(n)
         .collect()
 }
@@ -137,6 +137,6 @@ mod tests {
         let y = Fr::from(2u64);
         let n = 4;
         let result = generate_powers(y, n);
-        assert_eq!(result, vec![Fr::from(2u64), Fr::from(4u64), Fr::from(8u64), Fr::from(16u64)]);
+        assert_eq!(result, vec![Fr::from(1u64), Fr::from(2u64), Fr::from(4u64), Fr::from(8u64)]);
     }
 }
