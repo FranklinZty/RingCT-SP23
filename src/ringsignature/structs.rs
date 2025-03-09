@@ -44,8 +44,8 @@ pub struct LogarithmicRingSignature<C: CurveGroup> {
 pub struct RingSignatureParams<C: CurveGroup> {
     // the number of witness elements
     pub num_witness: usize,
-    // the number of public inputs (commitments)
-    pub num_pub_inputs: usize,
+    // the number of public keys
+    pub ring_size: usize,
     // the generators for commitments
     pub com_parameters: Vec<PedersenParams<C>>,
     // the signed message

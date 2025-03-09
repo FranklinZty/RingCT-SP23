@@ -4,8 +4,10 @@ use ark_ec::CurveGroup;
 use ark_ff::Field;
 use ark_std::{end_timer, rand::Rng, start_timer, UniformRand, Zero, One};
 
+use crate::bulletproofs::ipa::*;
+use crate::bulletproofs::structs::*;
 use crate::toolbox::commitment::pedersen::PedersenCommitmentScheme;
-use crate::rangeproof::structs::{LinearRangeProof, RangeProofParams, Openings};
+use crate::rangeproof::structs::{LogarithmicRangeProof, RangeProofParams, Openings};
 use crate::toolbox::commitment::PedersenParams;
 use crate::toolbox::sigma::{transcript::ProofTranscript, SigmaProtocol};
 use crate::toolbox::errors::SigmaErrors;
@@ -35,7 +37,7 @@ where
     // challenge
     type Challenge = Vec<C::ScalarField>;
     /// proof
-    type Proof = LinearRangeProof<C>;
+    type Proof = LogarithmicRangeProof<C>;
 
     fn setup<R: Rng>(
         rng: &mut R,
@@ -86,6 +88,7 @@ where
         let com_h_param = &params.com_parameters[1];
         let com_v_param = &params.com_parameters[2];
         let u = com_v_param.generator;
+        let v = com_v_param.vec_gen[0];
 
         // parse wit as vector of values and vector of randoms
         let vec_val = wit.0.clone();
@@ -239,9 +242,30 @@ where
         // mu = alpha + beta*x
         let mu = alpha + beta*x;
 
+        // Bulletproofs Compression
+        let inv_ym = y.inverse().unwrap().pow(&[val_size as u64]);
+        let powers_inv_yn = generate_powers(y.inverse().unwrap(), val_size);
+        let factors_G = vec![C::ScalarField::from(1u64); val_num * val_size];
+        let mut factors_H = Vec::<C::ScalarField>::with_capacity(val_num * val_size);
+        for i in 0..val_num {
+            let powers_inv_ymn = scalar_product(&powers_inv_yn, &inv_ym.pow(&[i as u64]));
+            factors_H.extend(powers_inv_ymn.clone());
+        }
+        let vec_G = com_g_param.vec_gen.clone();
+        let vec_H = com_h_param.vec_gen.clone();
+        let param = InnerProductParam {
+            factors_G,
+            factors_H,
+            u: v,
+            vec_G,
+            vec_H,
+        };
+
+        let proof = InnerProductProtocol::<C>::prove(&param, open_l.clone(), open_r.clone())?;
+
         let openings = Openings {
-            lx: open_l,
-            rx: open_r,
+            lx: vec![proof.a],
+            rx: vec![proof.b],
             hat_t,
             taux,
             mu,
@@ -249,10 +273,10 @@ where
 
         // proving ends
         end_timer!(start);
-
-        Ok(LinearRangeProof {
+        Ok(LogarithmicRangeProof {
             commitments: vec![com_A, com_B, com_T1, com_T2],
             openings,
+            compression_proof: proof,
             challenges: vec![y,z,x],
         })
     }
@@ -273,6 +297,7 @@ where
         let com_h_param = &params.com_parameters[1];
         let com_v_param = &params.com_parameters[2];
         let u = com_v_param.generator;
+        let v = com_v_param.vec_gen[0];
 
         // parse proof
         let commitments = &proof.commitments;
@@ -294,7 +319,7 @@ where
         }
 
         // check validity of T1 T2
-        // v^{hat_t} u^taux = V^{z^2} u^delta T1^x T2^{x^2}
+        // V^{z^2} v^delta T1^x T2^{x^2} u^{-taux} = v^{hat_t}
         let vec_1n = vec![C::ScalarField::one(); val_size];
         let ym = y.pow(&[val_size as u64]);
         let powers_yn = generate_powers(y, val_size);
@@ -310,26 +335,26 @@ where
         }
 
         assert_eq!(vec_zin.len(), params.com_value.len());
-        let lhs = PedersenCommitmentScheme::commit(com_v_param, &vec![openings.hat_t], &openings.taux, "on hat_t")?;
-        let rhs = C::msm(&params.com_value, &vec_zin).unwrap()
-            + PedersenCommitmentScheme::commit(com_v_param, &vec![delta], &C::ScalarField::zero(), "on delta")?
+        let lhs_step1 = C::msm(&params.com_value, &vec_zin).unwrap()
+            + PedersenCommitmentScheme::commit(com_v_param, &vec![delta], &openings.taux.neg(), "on delta ands -taux")?
             + com_T1.mul(x)
             + com_T2.mul(x*x);
-        assert_eq!(lhs, rhs, "step 1: T1, T2 checks fail");
+        // let rhs_step1 = PedersenCommitmentScheme::commit(com_v_param, &vec![openings.hat_t], &C::ScalarField::zero(), "on hat_t")?;
+        // assert_eq!(lhs_step1, rhs_step1, "step 1: T1, T2 checks fail");
 
         // check validity of A B
-        // A B^x g^{-z1^n} (h')^{z*y^n + z^2*2^n} = u^mu g^l (h')^r
+        // A B^x g^{-z1^n} (h')^{z*y^n + z^2*2^n} u^{-mu} = g^l (h')^r
         let powers_inv_yn = generate_powers(y.inverse().unwrap(), val_size);
         let inv_ym = y.inverse().unwrap().pow(&[val_size as u64]);
 
         let mut vec_zyn_z2n_yn = Vec::<C::ScalarField>::with_capacity(val_num*val_size);
-        let mut vec_r_yn = Vec::<C::ScalarField>::with_capacity(val_num*val_size);
+        // let mut vec_r_yn = Vec::<C::ScalarField>::with_capacity(val_num*val_size);
         for i in 0..val_num {
             let powers_ymn = scalar_product(&powers_yn, &ym.pow(&[i as u64]));
             let powers_inv_ymn = scalar_product(&powers_inv_yn, &inv_ym.pow(&[i as u64]));
             // vec_rx \circ y^{-n}
-            let temp_r_yn = hadamard_product(&powers_inv_ymn, &openings.rx[i*val_size..(i+1)*val_size].to_vec());
-            vec_r_yn.extend(temp_r_yn);
+            // let temp_r_yn = hadamard_product(&powers_inv_ymn, &openings.rx[i]);
+            // vec_r_yn.extend(temp_r_yn);
             // z*y^n + z^2*2^n
             let temp_zyn_z2n = vec_add(&scalar_product(&powers_ymn, &z), &scalar_product(&powers_2n, &z.pow(&[(i+2) as u64])));
             // (z*y^n + z^2*2^n) \circ y^{-n}
@@ -348,20 +373,42 @@ where
         let mut vec_xy = vec![z.neg(); val_num*val_size];
         vec_xy.extend(vec_zyn_z2n_yn.clone());
 
-        let mut vec_lx_rx = Vec::<C::ScalarField>::with_capacity(2*val_num*val_size);
-        vec_lx_rx.extend(openings.lx.clone());
-        vec_lx_rx.extend(vec_r_yn.clone());
+        // let mut vec_lx_rx = Vec::<C::ScalarField>::with_capacity(2*val_num*val_size);
+        // vec_lx_rx.extend(flatten_2d_vector(openings.lx.clone()));
+        // vec_lx_rx.extend(vec_r_yn.clone());
 
-        let lhs = com_A + com_B.mul(x)
-            + PedersenCommitmentScheme::commit(&com_g_h_u_params, &vec_xy, &C::ScalarField::zero(), "on -z1n, z*yn + z2*2n")?;
-        let rhs = PedersenCommitmentScheme::commit(&com_g_h_u_params, &vec_lx_rx, &openings.mu, "on lx, rx")?;
+        let lhs_step2 = com_A + com_B.mul(x)
+            + PedersenCommitmentScheme::commit(&com_g_h_u_params, &vec_xy, &C::ScalarField::zero(), "on -z1n, z*yn + z2*2n")?
+            + u.mul(&openings.mu.neg());
+        // let rhs_step2 = PedersenCommitmentScheme::commit(&com_g_h_u_params, &vec_lx_rx, &C::ScalarField::zero(), "on lx, rx")?;
+        // assert_eq!(lhs_step2, rhs_step2, "step 2: A,B checks fail");
 
-        assert_eq!(lhs, rhs, "step 2: A,B checks fail");
+        // run Bulletproofs Compression
+        // consider aggregating the following two equation into one
+        // V^{z^2} v^delta T1^x T2^{x^2} h^{-taux} = v^{hat_t}
+        // A B^x g^{-z1^n} (h')^{z*y^n + z^2*2^n} u^{-mu} = g^l (h')^r
+        let LHS = lhs_step1 + lhs_step2;
+        let vec_G = com_g_param.vec_gen.clone();
+        let vec_H = com_h_param.vec_gen.clone();
 
-        // check inner product hat_t = <zeta, eta>
-        let t = inner_product(&openings.lx, &openings.rx);
+        let factors_G = vec![C::ScalarField::from(1u64); val_num * val_size];
+        let mut factors_H = Vec::<C::ScalarField>::with_capacity(val_num * val_size);
+        for i in 0..val_num {
+            let powers_inv_ymn = scalar_product(&powers_inv_yn, &inv_ym.pow(&[i as u64]));
+            factors_H.extend(powers_inv_ymn.clone());
+        }
 
-        assert_eq!(openings.hat_t, t, "step 3: hat_t check fails");
+        let param = InnerProductParam {
+            factors_G,
+            factors_H,
+            u: v,
+            vec_G,
+            vec_H,
+        };
+
+        // call Bulletproofs verifier
+        InnerProductProtocol::<C>::verify(val_num*val_size, LHS, &param, &proof.compression_proof)?;
+
         let result = true;
         end_timer!(start);
         Ok(result)

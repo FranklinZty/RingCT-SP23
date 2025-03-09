@@ -65,7 +65,7 @@ where
 
         Ok(RingSignatureParams {
             num_witness: wit.len(),
-            num_pub_inputs: supported_size,
+            ring_size: supported_size,
             com_parameters: vec![com_params_1, com_params_2, key_params],
             message: msg.unwrap().clone(),
             vec_pk,
@@ -87,8 +87,8 @@ where
         let param_h_v = &params.com_parameters[1];
         let param_key = &params.com_parameters[2];
         // parse wit as vec_sk and vec_b
-        let vec_sk = wit[0..wit.len()-params.num_pub_inputs].to_vec();
-        let vec_b = wit[wit.len()-params.num_pub_inputs..].to_vec();
+        let vec_sk = wit[0..wit.len()-params.ring_size].to_vec();
+        let vec_b = wit[wit.len()-params.ring_size..].to_vec();
 
         // denote b_0 = b, b_1 = 1^n - b_0
         let vec_b0 = vec_b.clone();
@@ -125,8 +125,8 @@ where
         let z = transcript.get_and_append_challenge(b"challenge z")?;
 
         // t1 = <r_0 \circ y^n, z*1^n + b_1> + <(b0 + z*1^n) \circ y^n, r_1>
-        let powers_yn = generate_powers(y, params.num_pub_inputs);
-        let vec_z1n = vec![z; params.num_pub_inputs];
+        let powers_yn = generate_powers(y, params.ring_size);
+        let vec_z1n = vec![z; params.ring_size];
         let vec_r0_yn = hadamard_product(&vec_r0, &powers_yn);
         let vec_z1n_b1 = vec_add(&vec_z1n, &vec_b1);
         let vec_b0_z1n_yn = hadamard_product(&vec_add(&vec_z1n, &vec_b0), &powers_yn);
@@ -172,7 +172,7 @@ where
         let hat_t = inner_product(&zeta, &eta);
 
         // // sanity check
-        // let vec_1n = vec![C::ScalarField::one(); params.num_pub_inputs];
+        // let vec_1n = vec![C::ScalarField::one(); params.ring_size];
         // let delta = inner_product(&vec_1n, &powers_yn) * (z+z*z);
         // let t_prime = delta + t1*x + t2*x*x;
         // if t_prime == hat_t {println!("delta equality passes")}
@@ -185,7 +185,7 @@ where
         // fs = \sum_{j=1}^k y^{i_j} s_j + r_s*x
         let mut j = 0;
         let mut sum = C::ScalarField::zero();
-        for i in 0..params.num_pub_inputs {
+        for i in 0..params.ring_size {
             let term = powers_yn[i]*vec_b[i];
             if term != C::ScalarField::zero() {
                 sum += term*vec_sk[j];
@@ -195,7 +195,7 @@ where
         let fs = sum + rs*x;
 
         // Bulletproofs Compression
-        let powers_yn_inverse = generate_powers(y.inverse().unwrap(), params.num_pub_inputs);
+        let powers_yn_inverse = generate_powers(y.inverse().unwrap(), params.ring_size);
         let mut vec_g_yn = Vec::with_capacity(param_g_u.vec_gen.len());
         for i in 0..param_g_u.vec_gen.len() {
             vec_g_yn.push((param_g_u.vec_gen[i]*powers_yn_inverse[i]).into_affine());
@@ -263,9 +263,9 @@ where
 
         let (y,z,x) = (challenges[0],challenges[1],challenges[2]);
 
-        let vec_0n = vec![C::ScalarField::zero(); params.num_pub_inputs];
-        let vec_1n = vec![C::ScalarField::one(); params.num_pub_inputs];
-        let powers_yn = generate_powers(y, params.num_pub_inputs);
+        let vec_0n = vec![C::ScalarField::zero(); params.ring_size];
+        let vec_1n = vec![C::ScalarField::one(); params.ring_size];
+        let powers_yn = generate_powers(y, params.ring_size);
 
         // check validity of T1 T2
         // v^{hat_t} = v^delta T1^x T2^{x^2} y^{-taux}
@@ -282,12 +282,12 @@ where
 
         // check validity of A B
         // {vec_g'}^{zeta} vec_h^eta = A B^x vec_g^{z1^n} vec_h^{z1^n} u^{-mu}
-        let powers_yn_inverse = generate_powers(y.inverse().unwrap(), params.num_pub_inputs);
+        let powers_yn_inverse = generate_powers(y.inverse().unwrap(), params.ring_size);
         let mut vec_g_yn = Vec::with_capacity(param_g_u.vec_gen.len());
         for i in 0..param_g_u.vec_gen.len() {
             vec_g_yn.push((param_g_u.vec_gen[i]*powers_yn_inverse[i]).into_affine());
         }
-        let vec_z1n = vec![z; params.num_pub_inputs];
+        let vec_z1n = vec![z; params.ring_size];
         let param_g_yn_u = PedersenParams {
             generator: param_g_u.generator.clone(),
             vec_gen: vec_g_yn,
@@ -351,7 +351,7 @@ where
             vec_H,
         };
 
-        // call Bulletproofs prover
+        // call Bulletproofs verifier
         InnerProductProtocol::<C>::verify(n, RHS, &param, &proof.compression_proof)?;
         let result = true;
         end_timer!(start);
