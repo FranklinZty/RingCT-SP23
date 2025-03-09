@@ -340,19 +340,19 @@ mod tests {
     use super::*;
     use ark_secp256k1::{Fr, Projective, Affine};
     use ark_std::UniformRand;
-    use crate::toolbox::vec::convert;
+    use crate::toolbox::vec::vec_u64_to_F;
 
     #[test]
     fn test_ipa() {
         let mut rng = ark_std::test_rng();
         let n = 4;
-        let vec_a: Vec<Fr> = convert(&[1u64, 2u64, 3u64, 4u64]);
-        let vec_b: Vec<Fr> = convert(&[1u64, 1u64, 1u64, 1u64]);
+        let vec_a: Vec<Fr> = vec_u64_to_F(&[1u64, 2u64, 3u64, 4u64]);
+        let vec_b: Vec<Fr> = vec_u64_to_F(&[1u64, 1u64, 1u64, 1u64]);
         let vec_G = vec![Affine::rand(&mut rng); vec_a.len()];
         let vec_H = vec![Affine::rand(&mut rng); vec_a.len()];
         let u = Affine::rand(&mut rng);
-        let fac_G: Vec<Fr> = convert(&[1u64, 2u64, 3u64, 4u64]);
-        let fac_H: Vec<Fr> = convert(&[1u64, 1u64, 1u64, 1u64]);
+        let fac_G: Vec<Fr> = vec_u64_to_F(&[1u64, 2u64, 3u64, 4u64]);
+        let fac_H: Vec<Fr> = vec_u64_to_F(&[1u64, 1u64, 1u64, 1u64]);
 
         type IPA = InnerProductProtocol<Projective>;
         let params = InnerProductParam {

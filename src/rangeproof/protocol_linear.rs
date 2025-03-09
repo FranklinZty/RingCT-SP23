@@ -42,31 +42,28 @@ where
         _msg: Option<&String>,
         supported_size: usize, // value size (maximum bits)
     ) -> Result<Self::PublicParams, SigmaErrors> {
-        let value_num = wit.0.len(); // the number of values to be proved
-        let mut com_parameters = Vec::with_capacity(value_num*2); // parameters for binary commitments of values (b_0, b_1)
-        let val_com_parameters = PedersenCommitmentScheme::<C>::setup(rng, 1)?; // parameters for Z_p commitments of values
-        let mut com_value = Vec::with_capacity(value_num); // the commitment vector of values
+        // the number of values to be proved
+        let value_num = wit.0.len();
+        // parameters for binary commitments of values (b_0, b_1)
+        let com_g_parameters= PedersenCommitmentScheme::<C>::setup(rng, value_num*supported_size)?;
+        let com_h_parameters= PedersenCommitmentScheme::<C>::setup(rng, value_num*supported_size)?;
+        // parameters for Z_p commitments of values
+        let com_v_parameters = PedersenCommitmentScheme::<C>::setup(rng, 1)?;
+        // the commitment vector of values
+        let mut com_value = Vec::with_capacity(value_num);
 
         for i in 0..value_num {
-            // sample generators for binary commitments
-            let com_params_temp = PedersenCommitmentScheme::<C>::setup(rng, supported_size)?; // supported_size = 128
-            com_parameters.push(com_params_temp);
-            let com_params_temp = PedersenCommitmentScheme::<C>::setup(rng, supported_size)?;
-            com_parameters.push(com_params_temp);
-
             // compute the Z_p commitment of each value
             let random = C::ScalarField::rand(rng);
-            let value_num_term = PedersenCommitmentScheme::<C>::commit(&val_com_parameters, &vec![C::ScalarField::from(wit.0[i])], &random, "value")?;
+            let value_num_term = PedersenCommitmentScheme::<C>::commit(&com_v_parameters, &vec![C::ScalarField::from(wit.0[i])], &random, "value")?;
             wit.1.push(random);
             com_value.push(value_num_term.into_affine());
-
         }
-        com_parameters.push(val_com_parameters);
 
         Ok(RangeProofParams {
             num_witness: wit.0.len(),
             supported_size,
-            com_parameters,
+            com_parameters: vec![com_g_parameters, com_h_parameters, com_v_parameters],
             com_value,
         })
     }
@@ -84,10 +81,10 @@ where
         let val_size = params.supported_size;
 
         // parse commitment parameters
-        let bin_com_g_param = &params.com_parameters[0..val_num].to_vec();
-        let bin_com_h_param = &params.com_parameters[val_num..2*val_num].to_vec();
-        let val_com_param = &params.com_parameters[2*val_num];
-        let u = bin_com_g_param[0].generator;
+        let com_g_param = &params.com_parameters[0];
+        let com_h_param = &params.com_parameters[1];
+        let com_v_param = &params.com_parameters[2];
+        let u = com_v_param.generator;
 
         // parse wit as vector of values and vector of randoms
         let vec_val = wit.0.clone();
@@ -127,14 +124,22 @@ where
         let vec_r0 = vec![vec![C::ScalarField::rand(rng); val_size]; val_num];
         let vec_r1 = vec![vec![C::ScalarField::rand(rng); val_size]; val_num];
 
-        let mut batch_com_params = bin_com_g_param.clone();
-        batch_com_params.extend(bin_com_h_param.clone());
-        let mut batch_b = vec_b0.clone();
-        batch_b.extend(vec_b1.clone());
-        let mut batch_r = vec_r0.clone();
-        batch_r.extend(vec_r1.clone());
-        let com_A = PedersenCommitmentScheme::batch_commit(&batch_com_params, &u, &batch_b, &alpha, "on b0, b1")?;
-        let com_B = PedersenCommitmentScheme::batch_commit(&batch_com_params, &u, &batch_r, &beta, "on r0, r1")?;
+        let mut vec_g_h = Vec::<C::Affine>::with_capacity(2*val_num*val_size);
+        vec_g_h.extend(&com_g_param.vec_gen);
+        vec_g_h.extend(&com_h_param.vec_gen);
+        let com_g_h_u_params = PedersenParams::<C>{
+            generator: u,
+            vec_gen: vec_g_h,
+        };
+        let mut vec_b0_b1 = Vec::<C::ScalarField>::with_capacity(2*val_num*val_size);
+        let mut vec_r0_r1 = Vec::<C::ScalarField>::with_capacity(2*val_num*val_size);
+        vec_b0_b1.extend(flatten_2d_vector(vec_b0.clone()));
+        vec_b0_b1.extend(flatten_2d_vector(vec_b1.clone()));
+        vec_r0_r1.extend(flatten_2d_vector(vec_r0.clone()));
+        vec_r0_r1.extend(flatten_2d_vector(vec_r1.clone()));
+
+        let com_A = PedersenCommitmentScheme::commit(&com_g_h_u_params, &vec_b0_b1, &alpha, "on b0, b1")?;
+        let com_B = PedersenCommitmentScheme::commit(&com_g_h_u_params, &vec_r0_r1, &beta, "on r0, r1")?;
 
         // let com_A = PedersenCommitmentScheme::batch_commit(&bin_com_g_param, &u, &vec_b0, &alpha, "on b0")?
         //     + PedersenCommitmentScheme::batch_commit(&bin_com_h_param, &u, &vec_b1, &C::ScalarField::zero(), "on b1")?;
@@ -188,8 +193,8 @@ where
         // T2 = g^{t2} h^{tau2}
         let tau1 = C::ScalarField::rand(rng);
         let tau2 = C::ScalarField::rand(rng);
-        let com_T1 = PedersenCommitmentScheme::commit(&val_com_param, &vec![t1], &tau1, "T1")?;
-        let com_T2 = PedersenCommitmentScheme::commit(&val_com_param, &vec![t2], &tau2, "T2")?;
+        let com_T1 = PedersenCommitmentScheme::commit(&com_v_param, &vec![t1], &tau1, "T1")?;
+        let com_T2 = PedersenCommitmentScheme::commit(&com_v_param, &vec![t2], &tau2, "T2")?;
 
         // P->V: E, T1, T2
         transcript.append_serializable_element(b"commitments T1,T2", &[com_T1, com_T2])?;
@@ -280,10 +285,10 @@ where
         let val_size = params.supported_size;
 
         // parse commitment parameters
-        let bin_com_g_param = &params.com_parameters[0..val_num].to_vec();
-        let bin_com_h_param = &params.com_parameters[val_num..2*val_num].to_vec();
-        let val_com_param = &params.com_parameters[2*val_num];
-        let u = bin_com_g_param[0].generator;
+        let com_g_param = &params.com_parameters[0];
+        let com_h_param = &params.com_parameters[1];
+        let com_v_param = &params.com_parameters[2];
+        let u = com_v_param.generator;
 
         // parse proof
         let commitments = &proof.commitments;
@@ -321,9 +326,9 @@ where
         }
 
         assert_eq!(vec_zin.len(), params.com_value.len());
-        let lhs = PedersenCommitmentScheme::commit(val_com_param, &vec![openings.hat_t], &openings.taux, "on hat_t")?;
+        let lhs = PedersenCommitmentScheme::commit(com_v_param, &vec![openings.hat_t], &openings.taux, "on hat_t")?;
         let rhs = C::msm(&params.com_value, &vec_zin).unwrap()
-            + PedersenCommitmentScheme::commit(val_com_param, &vec![delta], &C::ScalarField::zero(), "on delta")?
+            + PedersenCommitmentScheme::commit(com_v_param, &vec![delta], &C::ScalarField::zero(), "on delta")?
             + com_T1.mul(x)
             + com_T2.mul(x*x);
         assert_eq!(lhs, rhs, "step 1: T1, T2 checks fail");
@@ -331,38 +336,41 @@ where
         // check validity of A B
         // A B^x g^{-z1^n} (h')^{z*y^n + z^2*2^n} = u^mu g^l (h')^r
         let powers_inv_yn = generate_powers(y.inverse().unwrap(), val_size);
-        let vec_neg_z1n = vec![z.neg(); val_size];
         let inv_ym = y.inverse().unwrap().pow(&[val_size as u64]);
 
-        let mut bin_com_hp_param = Vec::<PedersenParams<C>>::with_capacity(val_num);
-        let mut vec_zyn_z2n = Vec::<Vec::<C::ScalarField>>::with_capacity(val_num);
+        let mut vec_zyn_z2n_yn = Vec::<C::ScalarField>::with_capacity(val_num*val_size);
+        let mut vec_r_yn = Vec::<C::ScalarField>::with_capacity(val_num*val_size);
         for i in 0..val_num {
             let powers_ymn = scalar_product(&powers_yn, &ym.pow(&[i as u64]));
             let powers_inv_ymn = scalar_product(&powers_inv_yn, &inv_ym.pow(&[i as u64]));
-            let mut temp_vec_gen = Vec::<C::Affine>::with_capacity(val_size);
-            for j in 0..val_size {
-                temp_vec_gen.push((bin_com_h_param[i].vec_gen[j]*powers_inv_ymn[j]).into_affine());
-            }
-            let temp_param = PedersenParams::<C>{
-                generator: bin_com_h_param[i].generator.clone(),
-                vec_gen: temp_vec_gen,
-            };
-            bin_com_hp_param.push(temp_param);
+            // vec_rx \circ y^{-n}
+            let temp_r_yn = hadamard_product(&powers_inv_ymn, &openings.rx[i]);
+            vec_r_yn.extend(temp_r_yn);
+            // z*y^n + z^2*2^n
             let temp_zyn_z2n = vec_add(&scalar_product(&powers_ymn, &z), &scalar_product(&powers_2n, &z.pow(&[(i+2) as u64])));
-            vec_zyn_z2n.push(temp_zyn_z2n);
+            // (z*y^n + z^2*2^n) \circ y^{-n}
+            let temp_zyn_z2n_yn= hadamard_product(&powers_inv_ymn, &temp_zyn_z2n);
+            vec_zyn_z2n_yn.extend(temp_zyn_z2n_yn);
         }
 
-        let mut batch_com_params = bin_com_g_param.clone();
-        batch_com_params.extend(bin_com_hp_param.clone());
-        let mut batch_yz = vec![vec_neg_z1n; val_num];
-        batch_yz.extend(vec_zyn_z2n.clone());
-        let mut batch_open = openings.lx.clone();
-        batch_open.extend(openings.rx.clone());
+        let mut vec_g_h = Vec::<C::Affine>::with_capacity(2*val_num*val_size);
+        vec_g_h.extend(&com_g_param.vec_gen);
+        vec_g_h.extend(&com_h_param.vec_gen);
+        let com_g_h_u_params = PedersenParams::<C>{
+            generator: u,
+            vec_gen: vec_g_h,
+        };
+
+        let mut vec_xy = vec![z.neg(); val_num*val_size];
+        vec_xy.extend(vec_zyn_z2n_yn.clone());
+
+        let mut vec_lx_rx = Vec::<C::ScalarField>::with_capacity(2*val_num*val_size);
+        vec_lx_rx.extend(flatten_2d_vector(openings.lx.clone()));
+        vec_lx_rx.extend(vec_r_yn.clone());
 
         let lhs = com_A + com_B.mul(x)
-            + PedersenCommitmentScheme::batch_commit(&batch_com_params, &u, &batch_yz, &C::ScalarField::zero(), "on -z1n, z*yn + z2*2n")?;
-
-        let rhs = PedersenCommitmentScheme::batch_commit(&batch_com_params, &u, &batch_open, &openings.mu, "on lx")?;
+            + PedersenCommitmentScheme::commit(&com_g_h_u_params, &vec_xy, &C::ScalarField::zero(), "on -z1n, z*yn + z2*2n")?;
+        let rhs = PedersenCommitmentScheme::commit(&com_g_h_u_params, &vec_lx_rx, &openings.mu, "on lx")?;
 
         assert_eq!(lhs, rhs, "step 2: A,B checks fail");
 

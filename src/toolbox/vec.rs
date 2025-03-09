@@ -3,12 +3,16 @@ use ark_ec::CurveGroup;
 use rand::{seq::SliceRandom, thread_rng};
 use std::iter;
 
-pub fn convert<F: PrimeField>(m: &[u64]) -> Vec<F> {
+pub fn vec_u64_to_F<F: PrimeField>(m: &[u64]) -> Vec<F> {
     let mut vec_field: Vec<F> = Vec::new();
     for i in m.iter() {
         vec_field.push(F::from(*i));
     }
     vec_field
+}
+
+pub fn flatten_2d_vector<T: Clone>(matrix: Vec<Vec<T>>) -> Vec<T> {
+    matrix.into_iter().flat_map(|row| row.into_iter()).collect()
 }
 
 /// convert u128 value to a binary vector Vec<F> in little endian
@@ -93,10 +97,21 @@ mod tests {
     use ark_std::{UniformRand};
 
     #[test]
-    fn test_convert() {
+    fn test_vec_u64_to_F() {
         let msg: [u64; 4] = [1, 2, 3, 4];
-        let msg_field: Vec<Fr> = convert(&msg);
+        let msg_field: Vec<Fr> = vec_u64_to_F(&msg);
         assert_eq!(msg_field, vec![Fr::from(1u64), Fr::from(2u64), Fr::from(3u64), Fr::from(4u64)]);
+    }
+
+    #[test]
+    fn test_flatten_2d_vector() {
+        let matrix = vec![
+        vec![1, 2, 3],
+        vec![4, 5, 6],
+        vec![7, 8, 9],
+    ];
+        let flattened = flatten_2d_vector(matrix);
+        println!("{:?}", flattened);
     }
 
     #[test]
@@ -124,9 +139,9 @@ mod tests {
     #[test]
     fn test_inner_product() {
         let a: [u64; 4] = [1, 2, 3, 4];
-        let vec_a: Vec<Fr> = convert(&a);
+        let vec_a: Vec<Fr> = vec_u64_to_F(&a);
         let b: [u64; 4] = [4, 3, 2, 1];
-        let vec_b: Vec<Fr> = convert(&b);
+        let vec_b: Vec<Fr> = vec_u64_to_F(&b);
 
         let result = inner_product(&vec_a, &vec_b);
         assert_eq!(result, Fr::from(20u64));
