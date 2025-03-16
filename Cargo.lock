@@ -3,6 +3,22 @@
 version = 4
 
 [[package]]
+name = "RingCT-SP23"
+version = "0.1.0"
+dependencies = [
+ "ark-bls12-381",
+ "ark-ec",
+ "ark-ff",
+ "ark-secp256k1",
+ "ark-serialize",
+ "ark-std",
+ "displaydoc",
+ "merlin",
+ "rand",
+ "sha256",
+]
+
+[[package]]
 name = "addr2line"
 version = "0.24.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -198,17 +214,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3078c7629b62d3f0439517fa394996acacc5cbc91c5a20d8c658e77abd503a71"
 dependencies = [
  "generic-array",
-]
-
-[[package]]
-name = "bulletproofs"
-version = "0.1.0"
-dependencies = [
- "ark-ec",
- "ark-ff",
- "ark-secp256k1",
- "ark-std",
- "toolbox",
 ]
 
 [[package]]
@@ -508,22 +513,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ringsignature"
-version = "0.1.0"
-dependencies = [
- "ark-bls12-381",
- "ark-ec",
- "ark-ff",
- "ark-secp256k1",
- "ark-std",
- "bulletproofs",
- "merlin",
- "rand",
- "sha256",
- "toolbox",
-]
-
-[[package]]
 name = "rustc-demangle"
 version = "0.1.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -599,20 +588,6 @@ dependencies = [
  "backtrace",
  "bytes",
  "pin-project-lite",
-]
-
-[[package]]
-name = "toolbox"
-version = "0.1.0"
-dependencies = [
- "ark-ec",
- "ark-ff",
- "ark-secp256k1",
- "ark-serialize",
- "ark-std",
- "displaydoc",
- "merlin",
- "rand",
 ]
 
 [[package]]
